@@ -11,10 +11,10 @@ import javax.validation.ReportAsSingleViolation;
 
 @Documented
 @Constraint(validatedBy = PasswordEqualsValidator.class)
-@Target({ ElementType.TYPE }) //어노테이션을 부여할 수 있는 대상
-@Retention(RetentionPolicy.RUNTIME) //어노테이션 정보가 유지되는 범위  'Retention = 유지'
+@Target({ ElementType.TYPE })
+@Retention(RetentionPolicy.RUNTIME)
 @ReportAsSingleViolation
-public @interface PasswordEquals { //어노테이션 정의
+public @interface PasswordEquals {
 
     String message() default "{com.example.pictgram.validation.constraints.PasswordEquals.message}";
 

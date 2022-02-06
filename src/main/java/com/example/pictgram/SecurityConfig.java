@@ -34,16 +34,16 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
     private static final String[] URLS = { "/css/**", "/images/**", "/scripts/**", "/h2-console/**" };
 
     /**
-     * 認証から除外する
-     */
+    * 認証から除外する
+    */
     @Override
     public void configure(WebSecurity web) throws Exception {
         web.ignoring().antMatchers(URLS);
     }
 
     /**
-     * 認証を設定する
-     */
+    * 認証を設定する
+    */
     @Override
     protected void configure(HttpSecurity http) throws Exception {
         // @formatter:off
