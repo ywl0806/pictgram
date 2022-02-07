@@ -4,11 +4,14 @@ spring:
     url: jdbc:postgresql://localhost:5432/pictgram
     username: pictgram
     password: password
-
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
   h2:
     console:
       enabled: true
       debug: true
       
 image:
-  local: false
+  local: true

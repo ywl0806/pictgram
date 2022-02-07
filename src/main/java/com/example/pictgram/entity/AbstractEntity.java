@@ -1,31 +1,39 @@
 package com.example.pictgram.entity;
 
-import lombok.Data;
+import java.util.Date;
 
 import javax.persistence.Column;
 import javax.persistence.MappedSuperclass;
 import javax.persistence.PrePersist;
-import java.util.Date;
+import javax.persistence.PreUpdate;
 
-@MappedSuperclass //공통으로 사용하는 앤터티를 정의할때 사용
+import lombok.Data;
+
+@MappedSuperclass
 @Data
-public class AbstractEntity { //공통 모델
+public class AbstractEntity {
     @Column(name = "created_at")
     private Date createdAt;
 
-    @Column(name = "update_at")
+    @Column(name = "updated_at")
     private Date updatedAt;
 
-    @PrePersist // DB에 해당 테이블의 insert연산을 실행 할 때 같이 실행
+    @PrePersist
     public void onPrePersist() {
         Date date = new Date();
         setCreatedAt(date);
         setUpdatedAt(date);
     }
+//    @PrePersist  : Insert 실행 전 출력
+//    @PreUpdate   : Update 실행 전 출력
+//    @PreRemove   : Delete 실행 전 출력
+//    @PostPersist : Insert 실행 후 출력
+//    @PostUpdate  : Update 실행 후 출력
+//    @PostRemove  : Delete 실행 후 출력
+//    @PostLoad    : Select 실행 후 출력
 
-    @PrePersist
+    @PreUpdate
     public void onPreUpdate() {
         setUpdatedAt(new Date());
-
     }
 }
