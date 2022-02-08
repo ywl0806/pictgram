@@ -37,4 +37,5 @@ public class TopicForm {
 
 	private UserForm user;
 
+	private List<CommentForm> comments;
 }
