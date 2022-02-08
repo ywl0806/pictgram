@@ -45,10 +45,12 @@
 								th:src="@{/images/icons/login.png}">
 						</a></li>
 					</th:block>
+
 				</ul>
 			</div>
 		</div>
 	</nav>
+	
 	<div id="messages" layout:fragment="messages"
 		th:if="!${#lists.isEmpty(#fields.detailedErrors())}">
 		<ul>
