@@ -1,4 +1,9 @@
 -------------------------------------------------------------------------------
 Test set: com.example.pictgram.PictgramApplicationTests
 -------------------------------------------------------------------------------
-Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.262 s - in com.example.pictgram.PictgramApplicationTests
+Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 3.894 s <<< FAILURE! - in com.example.pictgram.PictgramApplicationTests
+contextLoads  Time elapsed: 0.001 s  <<< ERROR!
+java.lang.IllegalStateException: Failed to load ApplicationContext
+Caused by: org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'AWSConfiguration': Injection of autowired dependencies failed; nested exception is java.lang.IllegalArgumentException: Could not resolve placeholder 'AWS_ACCESS_KEY_ID' in value "${AWS_ACCESS_KEY_ID}"
+Caused by: java.lang.IllegalArgumentException: Could not resolve placeholder 'AWS_ACCESS_KEY_ID' in value "${AWS_ACCESS_KEY_ID}"
+

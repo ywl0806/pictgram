@@ -10,6 +10,7 @@ import javax.transaction.Transactional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.MessageSource;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -44,18 +45,20 @@ public class FavoritesController {
         List<Favorite> topics = repository.findByUserIdOrderByUpdatedAtDesc(user.getUserId());
         List<TopicForm> list = new ArrayList<>();
         for (Favorite entity : topics) {
+        	System.out.println(entity.getUpdatedAt());
             Topic topicEntity = entity.getTopic();
             TopicForm form = topicsController.getTopic(user, topicEntity);
             list.add(form);
         }
         model.addAttribute("list", list);
-
+        
         return "topics/index";
     }
 
     @RequestMapping(value = "/favorite", method = RequestMethod.POST)
     public String create(Principal principal, @RequestParam("topic_id") long topicId, RedirectAttributes redirAttrs,
             Locale locale) {
+    	System.out.println("시발 create");
         Authentication authentication = (Authentication) principal;
         UserInf user = (UserInf) authentication.getPrincipal();
         Long userId = user.getUserId();
@@ -79,6 +82,7 @@ public class FavoritesController {
     @Transactional
     public String destroy(Principal principal, @RequestParam("topic_id") long topicId, RedirectAttributes redirAttrs,
             Locale locale) {
+    	System.out.println("시발삭제");
         Authentication authentication = (Authentication) principal;
         UserInf user = (UserInf) authentication.getPrincipal();
         Long userId = user.getUserId();

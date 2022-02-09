@@ -10,6 +10,7 @@ import java.security.Principal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+
 import javax.servlet.http.HttpServletRequest;
 
 import org.apache.commons.io.FilenameUtils;
@@ -47,196 +48,199 @@ import com.example.pictgram.service.S3Wrapper;
 @Controller
 public class TopicsController {
 
-	protected static Logger log = LoggerFactory.getLogger(TopicsController.class);
+    protected static Logger log = LoggerFactory.getLogger(TopicsController.class);
 
-	@Autowired
-	private MessageSource messageSource;
+    @Autowired
+    private ModelMapper modelMapper;
 
-	@Autowired
-	private ModelMapper modelMapper;
+    @Autowired
+    private TopicRepository repository;
 
-	@Autowired
-	private TopicRepository repository;
+    @Autowired
+    private HttpServletRequest request;
+    
+    @Autowired
+    private MessageSource messageSource;
 
-	@Autowired
-	private HttpServletRequest request;
+    @Value("${image.local:false}")
+    private String imageLocal;
+    
+    @Value("${AWS_BUCKET}")
+    private String awsBucket;
+    
+    @Value("${AWS_DEFAULT_REGION}")
+    private String awsDefaultRegion;
+    
+    @Autowired
+    S3Wrapper s3;
 
-	@Value("${image.local:false}")
-	private String imageLocal;
+    @GetMapping(path = "/topics")
+    public String index(Principal principal, Model model) throws IOException {
+        Authentication authentication = (Authentication) principal;
+        UserInf user = (UserInf) authentication.getPrincipal();
 
-	@Value("${AWS_BUCKET}")
-	private String awsBucket;
+        Iterable<Topic> topics = repository.findAllByOrderByUpdatedAtDesc();
+        List<TopicForm> list = new ArrayList<>();
+        for (Topic entity : topics) {
+            TopicForm form = getTopic(user, entity);
+            list.add(form);
+        }
+        model.addAttribute("list", list);
 
-	@Value("${AWS_DEFAULT_REGION}")
-	private String awsDefaultRegion;
+        return "topics/index";
+    }
 
-	@Autowired
-	S3Wrapper s3;
+    public TopicForm getTopic(UserInf user, Topic entity) throws FileNotFoundException, IOException {
+        modelMapper.getConfiguration().setAmbiguityIgnored(true);
+        modelMapper.typeMap(Topic.class, TopicForm.class).addMappings(mapper -> mapper.skip(TopicForm::setUser));
+        modelMapper.typeMap(Topic.class, TopicForm.class).addMappings(mapper -> mapper.skip(TopicForm::setFavorites));
+        modelMapper.typeMap(Topic.class, TopicForm.class).addMappings(mapper -> mapper.skip(TopicForm::setComments));
+        modelMapper.typeMap(Favorite.class, FavoriteForm.class).addMappings(mapper -> mapper.skip(FavoriteForm::setTopic));
 
-	@GetMapping(path = "/topics")
-	public String index(Principal principal, Model model) throws IOException {
-		Authentication authentication = (Authentication) principal;
-		UserInf user = (UserInf) authentication.getPrincipal();
+        boolean isImageLocal = false;
+        if (imageLocal != null) {
+            isImageLocal = new Boolean(imageLocal);
+        }
+        TopicForm form = modelMapper.map(entity, TopicForm.class);
 
-		Iterable<Topic> topics = repository.findAllByOrderByUpdatedAtDesc();
-		List<TopicForm> list = new ArrayList<>();
-		for (Topic entity : topics) {
-			TopicForm form = getTopic(user, entity);
-			list.add(form);
-		}
-		model.addAttribute("list", list);
+        if (isImageLocal) {
+            try (InputStream is = new FileInputStream(new File(entity.getPath()));
+                    ByteArrayOutputStream os = new ByteArrayOutputStream()) {
+                byte[] indata = new byte[10240 * 16];
+                int size;
+                while ((size = is.read(indata, 0, indata.length)) > 0) {
+                    os.write(indata, 0, size);
+                }
+                StringBuilder data = new StringBuilder();
+                data.append("data:");
+                data.append(getMimeType(entity.getPath()));
+                data.append(";base64,");
 
-		return "topics/index";
-	}
+                data.append(new String(Base64Utils.encode(os.toByteArray()), "ASCII"));
+                form.setImageData(data.toString());
+            }
+        }
 
-	public TopicForm getTopic(UserInf user, Topic entity) throws FileNotFoundException, IOException {
-		modelMapper.getConfiguration().setAmbiguityIgnored(true); // 둘이상의 소스 프로퍼티와 일치하는 대상 프로퍼티를 무시할지 여부를 결정
-		modelMapper.typeMap(Topic.class, TopicForm.class).addMappings(mapper -> mapper.skip(TopicForm::setUser));
-		modelMapper.typeMap(Topic.class, TopicForm.class).addMappings(mapper -> mapper.skip(TopicForm::setComments));
-		modelMapper.typeMap(Topic.class, TopicForm.class).addMappings(mapper -> mapper.skip(TopicForm::setFavorites));
-		modelMapper.typeMap(Favorite.class, FavoriteForm.class)
-				.addMappings(mapper -> mapper.skip(FavoriteForm::setTopic));
-		boolean isImageLocal = false;
-		if (imageLocal != null) {
-			isImageLocal = new Boolean(imageLocal);
-		}
-		TopicForm form = modelMapper.map(entity, TopicForm.class);
+        UserForm userForm = modelMapper.map(entity.getUser(), UserForm.class);
+        form.setUser(userForm);
+        
+        List<FavoriteForm> favorites = new ArrayList<FavoriteForm>();
+        for (Favorite favoriteEntity : entity.getFavorites()) {
+        	FavoriteForm favorite = modelMapper.map(favoriteEntity, FavoriteForm.class);
+        	favorites.add(favorite);
+        	if (user.getUserId().equals(favoriteEntity.getUserId())) {
+        		form.setFavorite(favorite);
+        	}
+        }
+        form.setFavorites(favorites);
+        
+        List<CommentForm> comments = new ArrayList<CommentForm>();
 
-		if (isImageLocal) {
-			try (InputStream is = new FileInputStream(new File(entity.getPath()));
-					ByteArrayOutputStream os = new ByteArrayOutputStream()) { // ByteArrayOutputStream 데이터가 바이트배열에 기입해지는
-																				// 출력 스트림
-				byte[] indata = new byte[10240 * 16];
-				int size;
-				while ((size = is.read(indata, 0, indata.length)) > 0) {
-					os.write(indata, 0, size);
-				}
-				StringBuilder data = new StringBuilder(); // stringBuilder -> str+str 연산 보다 상대적으로 빠르고 부하도 적음
-				data.append("data:");
-				data.append(getMimeType(entity.getPath()));
-				data.append(";base64,");
+        for (Comment commentEntity : entity.getComments()) {
+        	CommentForm comment = modelMapper.map(commentEntity, CommentForm.class);
+        	comments.add(comment);
+        	}
+        form.setComments(comments);
+        return form;
+    }
 
-				data.append(new String(Base64Utils.encode(os.toByteArray()), "ASCII"));// Base64 인코딩
-				form.setImageData(data.toString());
-			}
-		}
+    private String getMimeType(String path) {
+        String extension = FilenameUtils.getExtension(path);
+        String mimeType = "image/";
+        switch (extension) {
+        case "jpg":
+        case "jpeg":
+            mimeType += "jpeg";
+            break;
+        case "png":
+            mimeType += "png";
+            break;
+        case "gif":
+            mimeType += "gif";
+            break;
+        }
+        return mimeType;
+    }
 
-		UserForm userForm = modelMapper.map(entity.getUser(), UserForm.class);
-		form.setUser(userForm);
+    @GetMapping(path = "/topics/new")
+    public String newTopic(Model model) {
+        model.addAttribute("form", new TopicForm());
+        return "topics/new";
+    }
 
-		List<FavoriteForm> favorites = new ArrayList<FavoriteForm>();
-		for (Favorite favoriteEntity : entity.getFavorites()) {
-			FavoriteForm favorite = modelMapper.map(favoriteEntity, FavoriteForm.class);
-			favorites.add(favorite);
-			if (user.getUserId().equals(favoriteEntity.getUserId())) {
-				form.setFavorite(favorite);
-			}
-		}
-		form.setFavorites(favorites);
-		List<CommentForm> comments = new ArrayList<CommentForm>();
+    @RequestMapping(value = "/topic", method = RequestMethod.POST)
+    public String create(Principal principal, @Validated @ModelAttribute("form") TopicForm form, BindingResult result,
+            Model model, @RequestParam MultipartFile image, RedirectAttributes redirAttrs, Locale locale)
+            throws IOException {
+        if (result.hasErrors()) {
+            model.addAttribute("hasMessage", true);
+            model.addAttribute("class", "alert-danger");
+            model.addAttribute("message", messageSource.getMessage("topics.create.flash.1", new String[] {}, locale));
+            return "topics/new";
+        }
 
-		for (Comment commentEntity : entity.getComments()) {
-			CommentForm comment = modelMapper.map(commentEntity, CommentForm.class);
-			comments.add(comment);
-		}
-		form.setComments(comments);
-		return form;
-	}
+        boolean isImageLocal = false;
+        if (imageLocal != null) {
+            isImageLocal = new Boolean(imageLocal);
+        }
 
-	private String getMimeType(String path) {
-		String extension = FilenameUtils.getExtension(path);
-		String mimeType = "image/";
-		switch (extension) {
-		case "jpg":
-		case "jpeg":
-			mimeType += "jpeg";
-			break;
-		case "png":
-			mimeType += "png";
-			break;
-		case "gif":
-			mimeType += "gif";
-			break;
-		}
-		return mimeType;
-	}
+        Topic entity = new Topic();
+        Authentication authentication = (Authentication) principal;
+        UserInf user = (UserInf) authentication.getPrincipal();
+        entity.setUserId(user.getUserId());
+        File destFile = null;
+        if (isImageLocal) {
+            destFile = saveImageLocal(image, entity);
+            entity.setPath(destFile.getAbsolutePath());
+        } else {
+            entity.setPath("");
+        }
+        entity.setDescription(form.getDescription());
+        repository.saveAndFlush(entity);
+        
+        if (!isImageLocal) {
+        	String url = saveImageS3(image, entity);
+        	entity.setPath(url);
+        	repository.saveAndFlush(entity);
+        	}
 
-	@GetMapping(path = "/topics/new")
-	public String newTopic(Model model) {
-		model.addAttribute("form", new TopicForm());
-		return "topics/new";
-	}
+        redirAttrs.addFlashAttribute("hasMessage", true);
+        redirAttrs.addFlashAttribute("class", "alert-info");
+        redirAttrs.addFlashAttribute("message", messageSource.getMessage("topics.create.flash.2", new String[] {}, locale));
+        return "redirect:/topics";
+    }
 
-	@RequestMapping(value = "/topic", method = RequestMethod.POST)
-	public String create(Principal principal, @Validated @ModelAttribute("form") TopicForm form, BindingResult result,
-			Model model, @RequestParam MultipartFile image, RedirectAttributes redirAttrs, Locale locale)
-			throws IOException {
-		if (result.hasErrors()) {
-			model.addAttribute("hasMessage", true);
-			model.addAttribute("class", "alert-danger");
-			model.addAttribute("message", messageSource.getMessage("topics.create.flash.1", new String[] {}, locale));
-			return "topics/new";
-		}
+    private String saveImageS3(MultipartFile image, Topic entity)
+        throws IOException {
+        String path = "uploads/topic/image/" + entity.getId() + "/" + image.getOriginalFilename();
+        s3.upload(image.getInputStream(), path);
+        String fileName = image.getOriginalFilename();
+        File destFile = File.createTempFile("s3_", ".tmp");
+        image.transferTo(destFile);
+        
+        String url = "https://" + awsBucket + ".s3-" + awsDefaultRegion + ".amazonaws.com/" + path;
+        
+        return url;
+        
+        
+    }
 
-		boolean isImageLocal = false;
-		if (imageLocal != null) {
-			isImageLocal = new Boolean(imageLocal);
-		}
-
-		Topic entity = new Topic();
-		Authentication authentication = (Authentication) principal;
-		UserInf user = (UserInf) authentication.getPrincipal();
-		entity.setUserId(user.getUserId());
-		File destFile = null;
-		if (isImageLocal) {
-			destFile = saveImageLocal(image, entity);
-			entity.setPath(destFile.getAbsolutePath());
-		} else {
-			entity.setPath("");
-		}
-		entity.setDescription(form.getDescription());
-		repository.saveAndFlush(entity);
-
-		if (!isImageLocal) {
-			String url = saveImageS3(image, entity);
-			entity.setPath(url);
-			repository.saveAndFlush(entity);
-		}
-
-		redirAttrs.addFlashAttribute("hasMessage", true);
-		redirAttrs.addFlashAttribute("class", "alert-info");
-		redirAttrs.addFlashAttribute("message",
-				messageSource.getMessage("topics.create.flash.2", new String[] {}, locale));
-
-		return "redirect:/topics";
-	}
+    
 
 	private File saveImageLocal(MultipartFile image, Topic entity) throws IOException {
-		File uploadDir = new File("/uploads");
-		uploadDir.mkdir();
+        File uploadDir = new File("/uploads");
+        uploadDir.mkdir();
 
-		String uploadsDir = "/uploads/";
-		String realPathToUploads = request.getServletContext().getRealPath(uploadsDir);
-		if (!new File(realPathToUploads).exists()) {
-			new File(realPathToUploads).mkdir();
-		}
-		String fileName = image.getOriginalFilename();
-		File destFile = new File(realPathToUploads, fileName);
-		image.transferTo(destFile);
+        String uploadsDir = "/uploads/";
+        String realPathToUploads = request.getServletContext().getRealPath(uploadsDir);
+        if (!new File(realPathToUploads).exists()) {
+            new File(realPathToUploads).mkdir();
+        }
+        String fileName = image.getOriginalFilename();
+        File destFile = new File(realPathToUploads, fileName);
+        image.transferTo(destFile);
 
-		return destFile;
-	}
-
-	private String saveImageS3(MultipartFile image, Topic entity) throws IOException {
-		String path = "uploads/topic/image/" + entity.getId() + "/" + image.getOriginalFilename();
-		s3.upload(image.getInputStream(), path);
-		String fileName = image.getOriginalFilename();
-		File destFile = File.createTempFile("s3_", ".tmp");
-		image.transferTo(destFile);
-
-		String url = "https://" + awsBucket + ".s3-" + awsDefaultRegion + ".amazonaws.com/" + path;
-
-		return url;
-	}
+        return destFile;
+    }
 
 }
