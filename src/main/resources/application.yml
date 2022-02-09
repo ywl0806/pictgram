@@ -11,5 +11,10 @@ spring:
   h2:
     console:
       enabled: true
-image:
-  local: true
+cloud:
+  aws:
+    stack:
+      auto: false
+    region:
+      auto: false
+      static: ap-northeast-1
