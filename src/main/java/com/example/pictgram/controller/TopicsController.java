@@ -58,6 +58,13 @@ import org.apache.sanselan.Sanselan;
 import org.apache.sanselan.common.IImageMetadata;
 import org.apache.sanselan.formats.jpeg.JpegImageMetadata;
 import org.apache.sanselan.formats.tiff.TiffImageMetadata.GPSInfo;
+import org.springframework.web.bind.annotation.ResponseBody;
+import java.lang.reflect.Type;
+import org.modelmapper.TypeToken;
+import org.springframework.http.MediaType;
+import com.example.pictgram.bean.TopicCsv;
+import com.fasterxml.jackson.dataformat.csv.CsvMapper;
+import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 
 @Controller
 public class TopicsController {
@@ -316,4 +323,17 @@ public class TopicsController {
 		}
 	}
 
+	@RequestMapping(value = "/topics/topic.csv", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE
+			+ "; charset=UTF-8; Content-Disposition: attachment")
+	@ResponseBody
+	public Object downloadCsv() throws IOException {
+		Iterable<Topic> topics = repository.findAll();
+		Type listType = new TypeToken<List<TopicCsv>>() {
+		}.getType();
+		List<TopicCsv> csv = modelMapper.map(topics, listType);
+		CsvMapper mapper = new CsvMapper();
+		CsvSchema schema = mapper.schemaFor(TopicCsv.class).withHeader();
+
+		return mapper.writer(schema).writeValueAsString(csv);
+	}
 }
