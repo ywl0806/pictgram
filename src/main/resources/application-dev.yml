@@ -30,3 +30,6 @@ spring:
       
 image:
   local: true
+  
+googlemap:
+  key: ${googlemap.key}
