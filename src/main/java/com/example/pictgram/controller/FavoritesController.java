@@ -1,5 +1,6 @@
 package com.example.pictgram.controller;
 
+import com.example.pictgram.service.S3Wrapper;
 import java.io.IOException;
 import java.security.Principal;
 import java.util.ArrayList;
@@ -29,72 +30,78 @@ import com.example.pictgram.repository.FavoriteRepository;
 @Controller
 public class FavoritesController {
 
-    @Autowired
-    private MessageSource messageSource;
+	@Autowired
+	S3Wrapper s3;
 
-    @Autowired
-    private FavoriteRepository repository;
+	@Autowired
+	private MessageSource messageSource;
 
-    @Autowired
-    private TopicsController topicsController;
+	@Autowired
+	private FavoriteRepository repository;
 
-    @GetMapping(path = "/favorites")
-    public String index(Principal principal, Model model) throws IOException {
-        Authentication authentication = (Authentication) principal;
-        UserInf user = (UserInf) authentication.getPrincipal();
-        List<Favorite> topics = repository.findByUserIdOrderByUpdatedAtDesc(user.getUserId());
-        List<TopicForm> list = new ArrayList<>();
-        for (Favorite entity : topics) {
-        	System.out.println(entity.getUpdatedAt());
-            Topic topicEntity = entity.getTopic();
-            TopicForm form = topicsController.getTopic(user, topicEntity);
-            list.add(form);
-        }
-        model.addAttribute("list", list);
-        
-        return "topics/index";
-    }
+	@Autowired
+	private TopicsController topicsController;
 
-    @RequestMapping(value = "/favorite", method = RequestMethod.POST)
-    public String create(Principal principal, @RequestParam("topic_id") long topicId, RedirectAttributes redirAttrs,
-            Locale locale) {
-    	System.out.println("시발 create");
-        Authentication authentication = (Authentication) principal;
-        UserInf user = (UserInf) authentication.getPrincipal();
-        Long userId = user.getUserId();
-        List<Favorite> results = repository.findByUserIdAndTopicId(userId, topicId);
-        if (results.size() == 0) {
-            Favorite entity = new Favorite();
-            entity.setUserId(userId);
-            entity.setTopicId(topicId);
-            repository.saveAndFlush(entity);
+	@GetMapping(path = "/favorites")
+	public String index(Principal principal, Model model) throws IOException {
+		Authentication authentication = (Authentication) principal;
+		UserInf user = (UserInf) authentication.getPrincipal();
+		List<Favorite> topics = repository.findByUserIdOrderByUpdatedAtDesc(user.getUserId());
+		List<TopicForm> list = new ArrayList<>();
+		for (Favorite entity : topics) {
+			System.out.println(entity.getUpdatedAt());
+			Topic topicEntity = entity.getTopic();
+			TopicForm form = topicsController.getTopic(user, topicEntity);
+			list.add(form);
+		}
+		model.addAttribute("list", list);
+		model.addAttribute("hasFooter", true);
+		ResponseEntity<byte[]> entity = s3.download("tags");
+		String body = new String(entity.getBody());
+		model.addAttribute("tags", body.split(System.getProperty("line.separator")));
+		return "topics/index";
+	}
 
-            redirAttrs.addFlashAttribute("hasMessage", true);
-            redirAttrs.addFlashAttribute("class", "alert-info");
-            redirAttrs.addFlashAttribute("message",
-                    messageSource.getMessage("favorites.create.flash", new String[] {}, locale));
-        }
+	@RequestMapping(value = "/favorite", method = RequestMethod.POST)
+	public String create(Principal principal, @RequestParam("topic_id") long topicId, RedirectAttributes redirAttrs,
+			Locale locale) {
+		System.out.println("시발 create");
+		Authentication authentication = (Authentication) principal;
+		UserInf user = (UserInf) authentication.getPrincipal();
+		Long userId = user.getUserId();
+		List<Favorite> results = repository.findByUserIdAndTopicId(userId, topicId);
+		if (results.size() == 0) {
+			Favorite entity = new Favorite();
+			entity.setUserId(userId);
+			entity.setTopicId(topicId);
+			repository.saveAndFlush(entity);
 
-        return "redirect:/topics";
-    }
+			redirAttrs.addFlashAttribute("hasMessage", true);
+			redirAttrs.addFlashAttribute("class", "alert-info");
+			redirAttrs.addFlashAttribute("message",
+					messageSource.getMessage("favorites.create.flash", new String[] {}, locale));
+		}
 
-    @RequestMapping(value = "/favorite", method = RequestMethod.DELETE)
-    @Transactional
-    public String destroy(Principal principal, @RequestParam("topic_id") long topicId, RedirectAttributes redirAttrs,
-            Locale locale) {
-    	System.out.println("시발삭제");
-        Authentication authentication = (Authentication) principal;
-        UserInf user = (UserInf) authentication.getPrincipal();
-        Long userId = user.getUserId();
-        List<Favorite> results = repository.findByUserIdAndTopicId(userId, topicId);
-        if (results.size() == 1) {
-            repository.deleteByUserIdAndTopicId(user.getUserId(), topicId);
+		return "redirect:/topics";
+	}
 
-            redirAttrs.addFlashAttribute("hasMessage", true);
-            redirAttrs.addFlashAttribute("class", "alert-info");
-            redirAttrs.addFlashAttribute("message",
-                    messageSource.getMessage("favorites.destroy.flash", new String[] {}, locale));
-        }
-        return "redirect:/topics";
-    }
+	@RequestMapping(value = "/favorite", method = RequestMethod.DELETE)
+	@Transactional
+	public String destroy(Principal principal, @RequestParam("topic_id") long topicId, RedirectAttributes redirAttrs,
+			Locale locale) {
+		System.out.println("시발삭제");
+		Authentication authentication = (Authentication) principal;
+		UserInf user = (UserInf) authentication.getPrincipal();
+		Long userId = user.getUserId();
+		List<Favorite> results = repository.findByUserIdAndTopicId(userId, topicId);
+		if (results.size() == 1) {
+			repository.deleteByUserIdAndTopicId(user.getUserId(), topicId);
+
+			redirAttrs.addFlashAttribute("hasMessage", true);
+			redirAttrs.addFlashAttribute("class", "alert-info");
+			redirAttrs.addFlashAttribute("message",
+					messageSource.getMessage("favorites.destroy.flash", new String[] {}, locale));
+		}
+		return "redirect:/topics";
+	}
 }
